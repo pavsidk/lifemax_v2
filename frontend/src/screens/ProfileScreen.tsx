@@ -58,6 +58,7 @@ export function ProfileScreen({ userId }: Props) {
   const [editVisible, setEditVisible] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const lastLevelRef = useRef<number>(_cache[userId]?.current_level ?? -1);
 
   const loadProfile = useCallback((showSpinnerIfEmpty = false) => {
@@ -79,6 +80,20 @@ export function ProfileScreen({ userId }: Props) {
   useFocusEffect(useCallback(() => {
     loadProfile(true);
   }, [loadProfile]));
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const data = await api.getProfile(userId, true);
+      _cache[userId] = data;
+      lastLevelRef.current = data.current_level;
+      setProfile(data);
+    } catch {
+      Alert.alert("Error", "Could not refresh analysis. Is Flask running?");
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const saveName = async () => {
     const trimmed = nameInput.trim();
@@ -148,8 +163,8 @@ export function ProfileScreen({ userId }: Props) {
             <Text style={styles.statLabel}>Quests</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statVal}>{profile?.xp ?? 0}</Text>
-            <Text style={styles.statLabel}>XP</Text>
+            <Text style={[styles.statVal, { fontSize: 20 }]}>{profile?.xp ?? 0}</Text>
+            <Text style={styles.statLabel}>/ {profile?.xp_to_next ?? 250} XP</Text>
           </View>
         </View>
 
@@ -179,11 +194,14 @@ export function ProfileScreen({ userId }: Props) {
 
         {/* Refresh */}
         <Pressable
-          onPress={loadProfile}
+          onPress={handleRefresh}
+          disabled={refreshing}
           style={({ pressed }) => [styles.refreshBtn, pressed && { opacity: 0.6 }]}
         >
-          <MaterialCommunityIcons name="refresh" size={16} color={colors.muted} />
-          <Text style={styles.refreshText}>Refresh analysis</Text>
+          {refreshing
+            ? <ActivityIndicator size="small" color={colors.muted} />
+            : <MaterialCommunityIcons name="refresh" size={16} color={colors.muted} />}
+          <Text style={styles.refreshText}>{refreshing ? "Analyzing…" : "Refresh analysis"}</Text>
         </Pressable>
 
         <View style={{ height: 32 }} />

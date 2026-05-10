@@ -150,8 +150,8 @@ export const api = {
       user_id: userId,
     }),
 
-  getProfile: (userId: string) =>
-    get<ProfileState>("/profile", { user_id: userId }),
+  getProfile: (userId: string, force = false) =>
+    get<ProfileState>("/profile", { user_id: userId, ...(force ? { force: "true" } : {}) }),
 
   setProfileName: (userId: string, name: string) =>
     post<{ name: string }>("/profile/name", { user_id: userId, name }),

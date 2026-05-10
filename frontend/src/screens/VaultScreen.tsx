@@ -131,7 +131,6 @@ export function VaultScreen({ userId }: Props) {
           />
           <Text style={styles.balanceLabel}>Game balance</Text>
           <Text style={styles.usdAmt}>${gameBalance.toFixed(2)}</Text>
-          <Text style={styles.solAmt}>{solBalance.toFixed(4)} SOL</Text>
           <View style={styles.hairline} />
           <Text style={styles.mockNote}>
             $1.00 reserved for subscription · Connect Phantom or Backpack wallet in production

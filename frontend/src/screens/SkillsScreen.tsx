@@ -1,15 +1,11 @@
-import React, { useState, useCallback, useRef, useMemo } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Pressable,
   Image,
-  Animated,
-  Easing,
-  Modal,
   useWindowDimensions,
   ActivityIndicator,
   Alert,
@@ -17,22 +13,15 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import ConfettiCannon from "react-native-confetti-cannon";
 import { colors } from "../theme/colors";
 import { api, SkillsState } from "../api";
+import { consumeLevelUpFlag } from "../levelUpFlag";
 
 const TREE_ART = require("../../assets/redwood-skill-tree.png");
 const SQUIRREL_MARKER = require("../../assets/squirrel-level-marker.png");
-const SQUIRREL_JUMP = require("../../assets/squirrel-jump.png");
 
 const SQUIRREL_MARKER_SIZE = 56;
-const JUMP_SPRITE_W = 72;
-const JUMP_SPRITE_H = 88;
-const SQUIRREL_FEET_OVERLAP_CARD = 10;
-const JUMP_SPRITE_NUDGE_DOWN = 52;
-const JUMP_CROSSFADE_MS = 220;
-const JUMP_HOLD_AT_START_MS = 1000;
-const JUMP_MOVE_MS = 1000;
-const JUMP_HOLD_AT_END_MS = 500;
 
 const TREE_ZOOM = 1;
 const LOCK_NUDGE_LEFT = 44;
@@ -45,6 +34,8 @@ const LEVEL4_NUDGE_LEFT_LITTLE = 16;
 const LEVEL4_EXTRA_DOWN = 32;
 const SMALL_TALK_EXTRA_RIGHT = 14;
 const SMALL_TALK_EXTRA_DOWN = 16;
+
+const CONFETTI_COLORS = [colors.cyan, colors.yellow, colors.green, "#FF6B6B", "#C77DFF", "#FFB347"];
 
 function ringCardTransform(level: number) {
   const sx = (n: number) => n * NUDGE_SCALE;
@@ -71,17 +62,6 @@ function useTreeArtMetrics(screenWidth: number) {
   return { slotHeight: (screenWidth / meta.width) * meta.height * TREE_ZOOM };
 }
 
-function measureCard(
-  cardRefs: React.MutableRefObject<Record<number, View | null>>,
-  level: number,
-): Promise<{ x: number; y: number; w: number; h: number }> {
-  return new Promise((resolve) => {
-    const node = cardRefs.current[level];
-    if (!node) return resolve({ x: 0, y: 0, w: 0, h: 0 });
-    node.measureInWindow((x, y, w, h) => resolve({ x, y, w, h }));
-  });
-}
-
 interface Props { userId: string }
 
 export function SkillsScreen({ userId }: Props) {
@@ -90,87 +70,34 @@ export function SkillsScreen({ userId }: Props) {
 
   const [skillsData, setSkillsData] = useState<SkillsState | null>(null);
   const [loading, setLoading] = useState(true);
-  const [jumpSession, setJumpSession] = useState<{ from: number; to: number } | null>(null);
 
-  const cardRefs = useRef<Record<number, View | null>>({});
-  const jumpPan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-  const jumpBlend = useRef(new Animated.Value(0)).current;
-  const jumpBusyRef = useRef(false);
+  const pendingLevelUp = useRef(false);
+  const confettiLeftRef = useRef<ConfettiCannon>(null);
+  const confettiMidRef = useRef<ConfettiCannon>(null);
+  const confettiRightRef = useRef<ConfettiCannon>(null);
 
   useFocusEffect(
     useCallback(() => {
+      if (consumeLevelUpFlag()) pendingLevelUp.current = true;
+
       setLoading(true);
       api.getSkills(userId)
-        .then(setSkillsData)
+        .then((data) => setSkillsData(data))
         .catch(() => Alert.alert("Error", "Could not load skills."))
         .finally(() => setLoading(false));
     }, [userId])
   );
 
-  const sittingFade = useMemo(
-    () => jumpBlend.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
-    [jumpBlend],
-  );
-
-  const currentLevel = skillsData?.current_level ?? 1;
-
-  const handleLevelPress = useCallback(
-    (target: number) => {
-      if (jumpBusyRef.current || target === currentLevel) return;
-      if (target < currentLevel) return;
-
-      const from = currentLevel;
-      jumpBusyRef.current = true;
-
-      measureCard(cardRefs, from).then((fromM) =>
-        measureCard(cardRefs, target).then((toM) => {
-          if (fromM.w < 1 || toM.w < 1) {
-            jumpBusyRef.current = false;
-            return;
-          }
-
-          const top = (cardTopY: number) =>
-            cardTopY - JUMP_SPRITE_H - SQUIRREL_FEET_OVERLAP_CARD + JUMP_SPRITE_NUDGE_DOWN;
-
-          jumpPan.stopAnimation();
-          jumpBlend.stopAnimation();
-          jumpBlend.setValue(0);
-          jumpPan.setValue({ x: fromM.x + fromM.w / 2 - JUMP_SPRITE_W / 2, y: top(fromM.y) });
-          setJumpSession({ from, to: target });
-
-          Animated.sequence([
-            Animated.timing(jumpBlend, {
-              toValue: 1,
-              duration: JUMP_CROSSFADE_MS,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-            }),
-            Animated.delay(JUMP_HOLD_AT_START_MS),
-            Animated.parallel([
-              Animated.timing(jumpPan.x, {
-                toValue: toM.x + toM.w / 2 - JUMP_SPRITE_W / 2,
-                duration: JUMP_MOVE_MS,
-                easing: Easing.inOut(Easing.cubic),
-                useNativeDriver: true,
-              }),
-              Animated.timing(jumpPan.y, {
-                toValue: top(toM.y),
-                duration: JUMP_MOVE_MS,
-                easing: Easing.inOut(Easing.cubic),
-                useNativeDriver: true,
-              }),
-            ]),
-            Animated.delay(JUMP_HOLD_AT_END_MS),
-          ]).start(({ finished }) => {
-            jumpBusyRef.current = false;
-            jumpBlend.setValue(0);
-            setJumpSession(null);
-          });
-        }),
-      );
-    },
-    [currentLevel, jumpBlend, jumpPan],
-  );
+  useEffect(() => {
+    if (loading || !skillsData || !pendingLevelUp.current) return;
+    pendingLevelUp.current = false;
+    const timer = setTimeout(() => {
+      confettiLeftRef.current?.start();
+      confettiMidRef.current?.start();
+      confettiRightRef.current?.start();
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [loading, skillsData]);
 
   if (loading || !skillsData) {
     return (
@@ -180,6 +107,8 @@ export function SkillsScreen({ userId }: Props) {
     );
   }
 
+  const currentLevel = skillsData.current_level;
+  const isGoalAchieved = currentLevel === 5 && skillsData.xp >= skillsData.xp_to_next;
   const treeLevels = [...skillsData.path].reverse();
 
   return (
@@ -198,7 +127,7 @@ export function SkillsScreen({ userId }: Props) {
 
           <View style={styles.progressCard}>
             <View style={styles.progressMetaRow}>
-              <Text style={styles.progressLabel}>Level {skillsData.current_level}</Text>
+              <Text style={styles.progressLabel}>Level {currentLevel}</Text>
               <Text style={styles.progressMeta}>{skillsData.xp} / {skillsData.xp_to_next} XP</Text>
             </View>
             <View style={styles.progressTrack}>
@@ -209,6 +138,14 @@ export function SkillsScreen({ userId }: Props) {
               />
             </View>
           </View>
+
+          {isGoalAchieved && (
+            <View style={styles.goalBanner}>
+              <MaterialCommunityIcons name="trophy-outline" size={18} color={colors.yellow} />
+              <Text style={styles.goalBannerText}>Goal achieved</Text>
+              <MaterialCommunityIcons name="check-decagram" size={16} color={colors.green} />
+            </View>
+          )}
         </View>
 
         <View style={[styles.treeTrack, { minHeight: treeSlotH }]}>
@@ -239,25 +176,19 @@ export function SkillsScreen({ userId }: Props) {
             {treeLevels.map((ring) => {
               const isLocked = ring.level > currentLevel;
               const isCurrent = ring.level === currentLevel;
-              const isDone = ring.level < currentLevel;
-              const crossfadeSitting =
-                jumpSession !== null && jumpSession.from === ring.level && ring.level === currentLevel;
+              const isDone = ring.level < currentLevel || (ring.level === currentLevel && isGoalAchieved);
 
               return (
                 <View key={ring.level} style={styles.ringAnchor}>
                   <View style={[styles.ringCardSlot, { transform: ringCardTransform(ring.level) }]}>
                     <View style={styles.ringCardStack}>
-                      <Pressable
-                        ref={(el) => { cardRefs.current[ring.level] = el; }}
-                        collapsable={false}
-                        onPress={() => handleLevelPress(ring.level)}
-                        style={({ pressed }) => [
+                      <View
+                        style={[
                           styles.ringCard,
                           styles.ringCardCompact,
                           isLocked && styles.ringLocked,
                           isCurrent && styles.ringCurrent,
                           isDone && styles.ringDone,
-                          pressed && { opacity: 0.92 },
                         ]}
                       >
                         <View style={styles.ringHeader}>
@@ -281,31 +212,17 @@ export function SkillsScreen({ userId }: Props) {
                         <Text style={[styles.ringTitle, isLocked && styles.textMuted]}>
                           {ring.label}
                         </Text>
-                      </Pressable>
+                      </View>
 
                       {isCurrent && (
-                        crossfadeSitting ? (
-                          <Animated.View
-                            style={[styles.squirrelMarkerOverlay, { opacity: sittingFade }]}
-                            pointerEvents="none"
-                          >
-                            <Image
-                              source={SQUIRREL_MARKER}
-                              style={styles.squirrelMarker}
-                              resizeMode="contain"
-                              accessibilityIgnoresInvertColors
-                            />
-                          </Animated.View>
-                        ) : (
-                          <View style={styles.squirrelMarkerOverlay} pointerEvents="none">
-                            <Image
-                              source={SQUIRREL_MARKER}
-                              style={styles.squirrelMarker}
-                              resizeMode="contain"
-                              accessibilityIgnoresInvertColors
-                            />
-                          </View>
-                        )
+                        <View style={styles.squirrelMarkerOverlay} pointerEvents="none">
+                          <Image
+                            source={SQUIRREL_MARKER}
+                            style={styles.squirrelMarker}
+                            resizeMode="contain"
+                            accessibilityIgnoresInvertColors
+                          />
+                        </View>
                       )}
                     </View>
                   </View>
@@ -318,23 +235,36 @@ export function SkillsScreen({ userId }: Props) {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      <Modal visible={jumpSession !== null} transparent animationType="none">
-        <View style={styles.jumpModalRoot} pointerEvents="auto">
-          <Animated.View
-            style={[
-              styles.jumpSpriteWrap,
-              { opacity: jumpBlend, transform: [{ translateX: jumpPan.x }, { translateY: jumpPan.y }] },
-            ]}
-          >
-            <Image
-              source={SQUIRREL_JUMP}
-              style={styles.jumpSprite}
-              resizeMode="contain"
-              accessibilityIgnoresInvertColors
-            />
-          </Animated.View>
-        </View>
-      </Modal>
+      <ConfettiCannon
+        ref={confettiLeftRef}
+        count={140}
+        origin={{ x: 0, y: -20 }}
+        autoStart={false}
+        fadeOut
+        fallSpeed={4500}
+        explosionSpeed={500}
+        colors={CONFETTI_COLORS}
+      />
+      <ConfettiCannon
+        ref={confettiMidRef}
+        count={140}
+        origin={{ x: W / 2, y: -20 }}
+        autoStart={false}
+        fadeOut
+        fallSpeed={4500}
+        explosionSpeed={500}
+        colors={CONFETTI_COLORS}
+      />
+      <ConfettiCannon
+        ref={confettiRightRef}
+        count={140}
+        origin={{ x: W, y: -20 }}
+        autoStart={false}
+        fadeOut
+        fallSpeed={4500}
+        explosionSpeed={500}
+        colors={CONFETTI_COLORS}
+      />
     </SafeAreaView>
   );
 }
@@ -408,9 +338,6 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   squirrelMarker: { width: SQUIRREL_MARKER_SIZE, height: SQUIRREL_MARKER_SIZE, backgroundColor: "transparent" },
-  jumpModalRoot: { flex: 1, backgroundColor: "transparent" },
-  jumpSpriteWrap: { position: "absolute", left: 0, top: 0, width: JUMP_SPRITE_W, height: JUMP_SPRITE_H },
-  jumpSprite: { width: JUMP_SPRITE_W, height: JUMP_SPRITE_H, backgroundColor: "transparent" },
   ringCard: {
     backgroundColor: "rgba(12,12,20,0.97)",
     borderRadius: 14,
@@ -463,4 +390,24 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   textMuted: { color: colors.mutedDark },
+
+  goalBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "rgba(255,214,10,0.08)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,214,10,0.22)",
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    marginTop: 4,
+  },
+  goalBannerText: {
+    color: colors.yellow,
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
 });

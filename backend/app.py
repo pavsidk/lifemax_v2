@@ -552,7 +552,7 @@ def _gemini_profile_summary(user: dict, confidence: float, presence: float) -> s
         f"You are a confidence coach. This user is working on '{user.get('goal','confidence')}'. "
         f"Stats: {total} quests attempted, level {user.get('current_level',1)}/5, "
         f"confidence rate {confidence}%, presence rate {presence}%. "
-        f"Write one punchy 2-sentence summary of their progress and one actionable tip. "
+        f"Write one punchy 2-sentence summary of their progress and one actionable tip. Don't use exact number of challenges but if they did many use a word like 'many'."
         f"No therapy-speak. Be direct and human. Don't directly mention the confidence or presence rates. Ensure that higher rate means more quests completed."
     )
     return ask_gemini(prompt)
@@ -561,6 +561,7 @@ def _gemini_profile_summary(user: dict, confidence: float, presence: float) -> s
 @app.route("/api/profile", methods=["GET"])
 def get_profile():
     user_id = request.args.get("user_id", "guest")
+    force = request.args.get("force", "false").lower() == "true"
     user = _get_user(user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
@@ -569,8 +570,7 @@ def get_profile():
     last_analyzed_level = user.get("_last_analyzed_level", -1)
     name = user.get("name", "Anonymous")
 
-    # Only re-run Gemini analysis when the user leveled up (or first time)
-    if current_level != last_analyzed_level:
+    if current_level != last_analyzed_level or force:
         confidence, presence = _compute_rates(user)
         summary = _gemini_profile_summary(user, confidence, presence)
         user["_last_analyzed_level"] = current_level

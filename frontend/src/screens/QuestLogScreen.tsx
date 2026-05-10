@@ -14,6 +14,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "../theme/colors";
 import { api, QuestState, CompleteResult } from "../api";
+import { setLevelUpFlag } from "../levelUpFlag";
 
 interface Props { userId: string }
 
@@ -43,6 +44,9 @@ export function QuestLogScreen({ userId }: Props) {
     setActing(true);
     try {
       const result: CompleteResult = await api.completeQuest(userId, outcome);
+      if (result.current_level > quest.current_level) {
+        setLevelUpFlag(quest.current_level, result.current_level);
+      }
       setCompletedQuests((prev) => [
         { title: quest.quest, when: "Just now", xp: result.xp_gained },
         ...prev.slice(0, 4),
@@ -83,8 +87,10 @@ export function QuestLogScreen({ userId }: Props) {
     );
   }
 
-  const atRisk = quest ? quest.balance_usd * 0.034 : 0;
-  const safe = quest ? quest.balance_usd - atRisk : 0;
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const walletBalance = Math.max(0, (quest?.balance_usd ?? 0) - 1.00);
+  const dailyWinBack = walletBalance > 0 ? walletBalance / daysInMonth : 0;
   const xpPct = quest ? Math.min((quest.xp / quest.xp_to_next) * 100, 100) : 0;
 
   return (
@@ -98,11 +104,11 @@ export function QuestLogScreen({ userId }: Props) {
         <View style={styles.pillRow}>
           <View style={styles.pill}>
             <View style={[styles.pillDot, { backgroundColor: colors.green }]} />
-            <Text style={styles.pillText}>${safe.toFixed(2)} safe</Text>
+            <Text style={styles.pillText}>${walletBalance.toFixed(2)} in Wallet</Text>
           </View>
           <View style={styles.pill}>
             <View style={[styles.pillDot, { backgroundColor: colors.orange }]} />
-            <Text style={styles.pillText}>${atRisk.toFixed(2)} at risk</Text>
+            <Text style={styles.pillText}>Win back ${dailyWinBack.toFixed(2)}/day</Text>
           </View>
         </View>
 
