@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Flask Backend",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["app.py"],
+      "cwd": "backend",
+      "port": 5001
+    },
+    {
+      "name": "Expo Frontend",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start"],
+      "cwd": "frontend",
+      "port": 8081
+    }
+  ]
+}

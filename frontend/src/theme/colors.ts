@@ -1,0 +1,18 @@
+export const colors = {
+  bg: '#08080F',
+  surface: 'rgba(255,255,255,0.05)',
+  surfaceElevated: 'rgba(255,255,255,0.08)',
+  surfaceSolid: '#111118',
+  cyan: '#00E5FF',
+  cyanDim: 'rgba(0,229,255,0.12)',
+  green: '#30D158',
+  orange: '#FF9F0A',
+  yellow: '#FFD60A',
+  white: '#FFFFFF',
+  muted: '#8E8E93',
+  mutedDark: '#48484A',
+  border: 'rgba(255,255,255,0.08)',
+  borderStrong: 'rgba(255,255,255,0.13)',
+  danger: '#FF453A',
+  dangerDark: '#7A1F1A',
+} as const;

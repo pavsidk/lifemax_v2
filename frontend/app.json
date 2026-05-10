@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "LifeMax",
+    "slug": "lifemax-v2",
+    "owner": "pavsidk",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "lifemax",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0B15"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.lifemax.v2"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B0B15"
+      },
+      "package": "com.lifemax.v2"
+    },
+    "plugins": [
+      "expo-web-browser"
+    ],
+    "extra": {
+      "googleWebClientId": "156107022023-94l3vlsm4qdtkcejn1i9e1vpatfmapko.apps.googleusercontent.com"
+    }
+  }
+}
